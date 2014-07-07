@@ -1,5 +1,5 @@
-Authors: Mingming Chen (email: chenm8@rpi.edu) and Sisi Liu (email: lius10@rpi.edu)
-Collaborator: Boleslaw K. Szymanski (email: szymab@rpi.edu)
+Authors: Mingming Chen (email: chenm8@rpi.edu) and Sisi Liu (email: lius10@rpi.edu).
+Collaborator: Boleslaw K. Szymanski (email: szymab@rpi.edu).
 
 
 -------------------------------------1. Compile-----------------------------------------------
