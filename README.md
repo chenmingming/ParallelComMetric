@@ -8,5 +8,10 @@ A parallel toolkit, implemented with MPI and Pthreads, to calculate the communit
 The source code is under directory src. Also, please refer to the ReadMe.txt under directory src for how to run the code.
 
 
+References
+=================
+Mingming Chen, Sisi Liu, and Boleslaw Szymanski, “Parallel Toolkit for Measuring the Quality of Network Community Structure”, The First European Network Intelligence Conference (ENIC), Wroclaw, Poland, September, 2014.
+
+
 
 
