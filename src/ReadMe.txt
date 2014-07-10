@@ -1,4 +1,4 @@
-Authors: Mingming Chen (email: chenm8@rpi.edu) and Sisi Liu (email: lius10@rpi.edu)
+Authors: Mingming Chen (email: mileschen2008@gmail.com) and Sisi Liu (email: liusisiapply@gmail.com)
 Collaborator: Boleslaw K. Szymanski (email: szymab@rpi.edu)
 
 
@@ -54,8 +54,12 @@ Example 4:
 ./pthreadmetric 4 0 ./dataset/football_detected_community.groups ./dataset/football_network.pairs 1 1
 
 
+-------------------------------------4. Input format----------------------------------------------
+(1) The network should be a list of tab or space delimited edges/links with format like "srcNodeId dstNodeId weight" or "srcNodeId\tdstNodeId\tweight".
+(2) The ground truth community or detected community file have the format that each line in the file represents a community with node separated with a single space.
 
--------------------------------------4. Output format---------------------------------------------
+
+-------------------------------------5. Output format---------------------------------------------
 (1) Output format of parallel MPI programs for calculating the metrics with ground truth community structure
 numProcs total_running_time_information_theory_metrics computation_time msg_passing_time total_running_time_cluster_matching_metrics computation_time msg_passing_time total_running_time_pair_counting_metrics computation_time msg_passing_time
 numProcs VI NMI F-measure NVD RI ARI JI
@@ -73,5 +77,5 @@ numThreads total_running_time
 numThreads modularity modularity_density #intra-edges intra-density contraction #inter-edges expansion conductance
 
 
------------------------------------------5. Note--------------------------------------------------
+-----------------------------------------6. Note--------------------------------------------------
 Note: when running the programs, remember to change the predefined clock rate variables in MPIMetricMain.cpp and PthreadMetricMain.cpp to be the value of the clock rate of your own machine. There are used to calculate the running time of the parallel programs.
