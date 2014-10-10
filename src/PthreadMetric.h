@@ -47,6 +47,7 @@ private:
 
 	// Network and community containers
 	unordered_map<T, unordered_map<T, double> > network;
+	unordered_map<T, unordered_map<T, double> > inNet;
 	vector<unordered_set<T> > realVecCommunities;
 	vector<unordered_set<T> > disVecCommunities;
 	unordered_map<T, int> realMapCommunities;

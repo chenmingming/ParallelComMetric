@@ -62,6 +62,12 @@ public:
 			unordered_set<T>& outCommunityNodes, bool isUnweighted,
 			bool isUndirected);
 
+	// Get the network that only contains nodes of the corresponding communities
+	double getCommunityReversedNetwork(
+			const unordered_map<T, int>& disMapCommunities,
+			unordered_map<T, unordered_map<T, double> >& communityInNetwork,
+			bool isUnweighted, bool isUndirected);
+
 	void getOutCommunityNodeInfo(unordered_map<int, int>& communitySizes,
 			unordered_map<T, int>& disMapCommunities,
 			const unordered_set<T>& outCommunityNodes);
@@ -72,6 +78,9 @@ public:
 	//--------------------------For PthreadMetric---------------------------------------//
 	double getNetwork(bool isUnweighted, bool isUndirected,
 			unordered_map<T, unordered_map<T, double> >& network);
+
+	double getReversedNetwork(bool isUnweighted, bool isUndirected,
+				unordered_map<T, unordered_map<T, double> >& inNet);
 
 	long getCommunity(vector<unordered_set<T> >& communities);
 

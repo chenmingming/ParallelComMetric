@@ -250,6 +250,8 @@ double Reader<T>::getCommunityNetwork(
 
 			if (dstIt == disMapCommunities.end()) {
 				outCommunityNodes.insert(dstId);
+			} else {
+				innerMap dstNbs = communityNetwork[dstId];
 			}
 		}
 
@@ -266,6 +268,87 @@ double Reader<T>::getCommunityNetwork(
 
 				if (srcIt == disMapCommunities.end()) {
 					outCommunityNodes.insert(srcId);
+				}
+			}
+		}
+	}
+
+	return comNetWeight;
+}
+
+/**
+ * Get the network that only contains nodes of the corresponding communities
+ */
+template<class T>
+double Reader<T>::getCommunityReversedNetwork(
+		const unordered_map<T, int>& disMapCommunities,
+		unordered_map<T, unordered_map<T, double> >& communityInNetwork,
+		bool isUnweighted, bool isUndirected) {
+	assert(this->fileName != "");
+	ifstream networkFp;
+	networkFp.open(this->fileName.c_str(), ios_base::in);
+	if (!networkFp.is_open()) {
+		fprintf(stderr, "getCommunityNetwork->cannot open %s\n", this->fileName.c_str());
+		return -1;
+	}
+
+	double comNetWeight = 0;
+	string lineStr;
+	T srcId;
+	T dstId;
+	double weight;
+	typedef unordered_map<T, double> innerMap;
+	typename unordered_map<T, int>::const_iterator srcIt;
+	typename unordered_map<T, int>::const_iterator dstIt;
+	typename unordered_map<T, double>::iterator nbIter;
+	while (networkFp.good()) {
+		getline(networkFp, lineStr);
+		if (lineStr.empty()) {
+			continue;
+		}
+
+		istringstream lineStream(lineStr);
+		lineStream >> srcId;
+		lineStream >> dstId;
+
+		// Ignore self-loop edge
+		if (srcId == dstId) {
+			continue;
+		}
+		weight = 1;
+
+		// If weighted network, read in weight
+		if (!isUnweighted) {
+			lineStream >> weight;
+		}
+
+		// cout << srcId << "\t" << dstId << "\t" << weight << endl;
+
+		srcIt = disMapCommunities.find(srcId);
+		dstIt = disMapCommunities.find(dstId);
+		if (dstIt != disMapCommunities.end()) {
+			innerMap &nbs = communityInNetwork[dstId];
+			nbIter = nbs.find(srcId);
+
+			if (nbIter == nbs.end()) {
+				nbs.insert(make_pair(srcId, weight));
+				comNetWeight += weight;
+			}
+
+			if (srcIt != disMapCommunities.end()) {
+				innerMap srcNbs = communityInNetwork[srcId];
+			}
+		}
+
+		// For undirected network, add the reverse edge
+		if (isUndirected) {
+			if (srcIt != disMapCommunities.end()) {
+				innerMap &nbs = communityInNetwork[srcId];
+				nbIter = nbs.find(dstId);
+
+				if (nbIter == nbs.end()) {
+					nbs.insert(make_pair(dstId, weight));
+					comNetWeight += weight;
 				}
 			}
 		}
@@ -389,6 +472,8 @@ double Reader<T>::getNetwork(bool isUnweighted, bool isUndirected,
 			totalWeight += weight;
 		}
 
+		innerMap dstNbs = network[dstId];
+
 		// For undirected network, add the reverse edge
 		if (isUndirected) {
 			innerMap &nbs = network[dstId];
@@ -396,6 +481,75 @@ double Reader<T>::getNetwork(bool isUnweighted, bool isUndirected,
 
 			if (nbIter == nbs.end()) {
 				nbs.insert(make_pair(srcId, weight));
+				totalWeight += weight;
+			}
+		}
+	}
+
+	return totalWeight;
+}
+
+/**
+ * Get the whole network
+ */
+template<class T>
+double Reader<T>::getReversedNetwork(bool isUnweighted, bool isUndirected,
+		unordered_map<T, unordered_map<T, double> >& inNet) {
+	assert(this->fileName != "");
+	ifstream networkFp;
+	networkFp.open(this->fileName.c_str(), ios_base::in);
+	if (!networkFp.is_open()) {
+		fprintf(stderr, "getNetwork->cannot open %s\n", this->fileName.c_str());
+		return -1;
+	}
+
+	double totalWeight = 0;
+	string lineStr;
+	T srcId;
+	T dstId;
+	double weight;
+	typedef unordered_map<T, double> innerMap;
+	typename unordered_map<T, double>::iterator nbIter;
+	while (networkFp.good()) {
+		getline(networkFp, lineStr);
+		if (lineStr.empty()) {
+			continue;
+		}
+
+		istringstream lineStream(lineStr);
+		lineStream >> srcId;
+		lineStream >> dstId;
+
+		// Ignore self-loop edge
+		if (srcId == dstId) {
+			continue;
+		}
+		weight = 1;
+
+		// If weighted network, read in weight
+		if (!isUnweighted) {
+			lineStream >> weight;
+		}
+
+		// cout << srcId << "\t" << dstId << "\t" << weight << endl;
+
+		innerMap &nbs = inNet[dstId];
+		nbIter = nbs.find(srcId);
+
+		if (nbIter == nbs.end()) {
+			nbs.insert(make_pair(srcId, weight));
+			totalWeight += weight;
+		}
+
+		innerMap srcNbs = inNet[srcId];
+
+		// For undirected network, add the reverse edge
+		if (isUndirected) {
+			innerMap &nbs = inNet[srcId];
+			nbIter = nbs.find(dstId);
+
+			if (nbIter == nbs.end()) {
+				nbs.insert(make_pair(dstId, weight));
 				totalWeight += weight;
 			}
 		}

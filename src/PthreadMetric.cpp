@@ -195,10 +195,8 @@ double PthreadMetric<T>::getJI() {
 template<class T>
 void* PthreadMetric<T>::metricWithoutGroundTruthAdaptor(void *arg) {
 	struct thread_arg<T> *tmp_pointer = (struct thread_arg<T> *) arg;
-	tmp_pointer->classPointer->subWithoutGroundTruthMetricCalculation(
+	return tmp_pointer->classPointer->subWithoutGroundTruthMetricCalculation(
 			tmp_pointer);
-
-	return NULL;
 }
 
 template<class T>
@@ -206,8 +204,9 @@ void* PthreadMetric<T>::subWithoutGroundTruthMetricCalculation(
 		struct thread_arg<T> *arg) {
 	unsigned int threadId = arg->threadId;
 	int disComNum = this->disVecCommunities.size();
-	unordered_map<T, int> nodeCommunities;
+	// unordered_map<T, int> nodeCommunities;
 	unordered_map<int, double> comWeights;
+	unordered_map<int, double> comEdges;
 
 	double threadModularity = 0;
 	double threadQds = 0;
@@ -219,13 +218,15 @@ void* PthreadMetric<T>::subWithoutGroundTruthMetricCalculation(
 	double threadExpansion = 0;
 	double threadConductance = 0;
 
-	// Calculate VI and NMI for this thread
+	// Calculate metrics for this thread
 	for (int i = 0; i < disComNum; ++i) {
 		if (i % this->numThreads == threadId) {
 			comWeights.clear();
+			comEdges.clear();
 			unordered_set<T> disCommunity = disVecCommunities[i];
 			int comId = i;
 			double comSize = disCommunity.size();
+			double out_incoming_weights = 0;
 			typename unordered_set<T>::const_iterator comNodeIt;
 			for (comNodeIt = disCommunity.begin();
 					comNodeIt != disCommunity.end(); ++comNodeIt) {
@@ -238,10 +239,26 @@ void* PthreadMetric<T>::subWithoutGroundTruthMetricCalculation(
 					double weight = nbIt->second;
 					double comWeight = comWeights[nbComId];
 					comWeights[nbComId] = comWeight + weight;
+					double comEdge = comEdges[nbComId];
+					comEdges[nbComId] = comEdge + 1;
+				}
+
+				if (!this->isUndirected) {
+					nbs = this->inNet[nodeId];
+					for (nbIt = nbs.begin(); nbIt != nbs.end(); ++nbIt) {
+						int nbNodeId = nbIt->first;
+						int nbComId = this->disMapCommunities[nbNodeId];
+
+						if (comId != nbComId) {
+							double weight = nbIt->second;
+							out_incoming_weights += weight;
+						}
+					}
 				}
 			} // community node for
 
 			double inWeights = comWeights[comId];
+			double inEdges = comEdges[comId];
 			double outWeights = 0;
 			double splitPenalty = 0;
 			typename unordered_map<int, double>::const_iterator weightIter;
@@ -253,25 +270,41 @@ void* PthreadMetric<T>::subWithoutGroundTruthMetricCalculation(
 				if (comId != nbComId) {
 					double comWeight = weightIter->second;
 					outWeights += comWeight;
+					double comEdge = comEdges[nbComId];
 					double sp = (comWeight / this->totalWeight)
-							* (comWeight / (comSize * nbComSize));
+							* (comEdge / (comSize * nbComSize));
 					splitPenalty += sp;
 				}
 			}
 
 			// modularity
-			threadModularity += inWeights / this->totalWeight
-					- pow((inWeights + outWeights) / this->totalWeight, 2);
+			if (this->isUndirected) {
+				threadModularity += inWeights / this->totalWeight
+						- pow((inWeights + outWeights) / this->totalWeight, 2);
+			} else {
+				threadModularity += inWeights / this->totalWeight
+						- ((inWeights + outWeights)
+								* (inWeights + out_incoming_weights))
+								/ pow(this->totalWeight, 2);
+			}
 
 			// Modularity Density Qds
 			double inDensity = 0;
 			if (comSize > 1) {
-				inDensity = inWeights / (comSize * (comSize - 1));
+				inDensity = inEdges / (comSize * (comSize - 1));
 			}
-			threadQds += (inWeights / this->totalWeight) * inDensity
-					- pow(
-							((inWeights + outWeights) / this->totalWeight)
-									* inDensity, 2) - splitPenalty;
+			if (this->isUndirected) {
+				threadQds += (inWeights / this->totalWeight) * inDensity
+						- pow(
+								((inWeights + outWeights) / this->totalWeight)
+										* inDensity, 2) - splitPenalty;
+			} else {
+				threadQds += (inWeights / this->totalWeight) * inDensity
+						- (((inWeights + outWeights)
+								* (inWeights + out_incoming_weights))
+								/ pow(this->totalWeight, 2)) * pow(inDensity, 2)
+						- splitPenalty;
+			}
 
 			// intra-edges
 			if (isUndirected) {
@@ -311,28 +344,43 @@ void* PthreadMetric<T>::subWithoutGroundTruthMetricCalculation(
 		} // end if
 	} // end community for
 
-	this->modularity += threadModularity;
-	this->Qds += threadQds;
-	this->intraEdges += threadIntraEdges;
-	this->intraDensity += threadIntraDensity;
-	this->contraction += threadContraction;
-	this->interEdges += threadInterEdges;
-	this->expansion += threadExpansion;
-	this->conductance += threadConductance;
+	// Do not update the global variables in threads, must synchronization if doing so
+//	this->modularity += threadModularity;
+//	this->Qds += threadQds;
+//	this->intraEdges += threadIntraEdges;
+//	this->intraDensity += threadIntraDensity;
+//	this->contraction += threadContraction;
+//	this->interEdges += threadInterEdges;
+//	this->expansion += threadExpansion;
+//	this->conductance += threadConductance;
+//	pthread_exit((void*) 0);
 
-	pthread_exit((void*) 0);
-	return NULL;
+	double* results = new double[8];
+	results[0] = threadModularity;
+	results[1] = threadQds;
+	results[2] = threadIntraEdges;
+	results[3] = threadIntraDensity;
+	results[4] = threadContraction;
+	results[5] = threadInterEdges;
+	results[6] = threadExpansion;
+	results[7] = threadConductance;
+	return (void *) results;
 }
 
 template<class T>
 double PthreadMetric<T>::computeMetricWithoutGroundTruth() {
 	// First, clear it in case that it has content.
 	this->network.clear();
+	this->inNet.clear();
 	this->disVecCommunities.clear();
 	this->disMapCommunities.clear();
 	Reader<T> reader(this->networkFile);
 	this->totalWeight = reader.getNetwork(this->isUnweighted,
 			this->isUndirected, this->network);
+	if (!this->isUndirected) {
+		reader.getReversedNetwork(this->isUnweighted, this->isUndirected,
+				this->inNet);
+	}
 	reader.setFileName(this->disCommunityFile);
 	this->numNodes = reader.getCommunity(this->disVecCommunities);
 	reader.getMapCommunity(this->disMapCommunities);
@@ -375,7 +423,20 @@ double PthreadMetric<T>::computeMetricWithoutGroundTruth() {
 			cerr
 					<< "computeMetricWithoutGroundTruth::pthread_join return code is "
 					<< returnCode << endl;
+		} else {
+			// if success, update the metrics values
+			double* results = (double *) thread_status;
+			this->modularity += results[0];
+			this->Qds += results[1];
+			this->intraEdges += results[2];
+			this->intraDensity += results[3];
+			this->contraction += results[4];
+			this->interEdges += results[5];
+			this->expansion += results[6];
+			this->conductance += results[7];
 		}
+
+		free(thread_status);
 	}
 
 	pthread_attr_destroy(&attr);
@@ -399,9 +460,10 @@ double PthreadMetric<T>::computeMetricWithoutGroundTruth() {
 template<class T>
 void* PthreadMetric<T>::infoEntropyMetricAdaptor(void *arg) {
 	struct thread_arg<T> *tmp_pointer = (struct thread_arg<T> *) arg;
-	tmp_pointer->classPointer->subInfoEntropyMetricCalculation(tmp_pointer);
+	return tmp_pointer->classPointer->subInfoEntropyMetricCalculation(
+			tmp_pointer);
 
-	return NULL;
+	// return NULL;
 }
 
 template<class T>
@@ -457,13 +519,20 @@ void* PthreadMetric<T>::subInfoEntropyMetricCalculation(
 		}
 	}
 
-	this->xentropy += threadXentropy;
-	this->yentropy += threadYentropy;
-	this->VI += threadVI;
-	this->NMI += threadNMI;
+	// Do not update the global variables in threads, must synchronization if doing so
+//	this->xentropy += threadXentropy;
+//	this->yentropy += threadYentropy;
+//	this->VI += threadVI;
+//	this->NMI += threadNMI;
+//	pthread_exit((void*) 0);
 
-	pthread_exit((void*) 0);
-	return NULL;
+	double* results = new double[4];
+	results[0] = threadXentropy;
+	results[1] = threadYentropy;
+	results[2] = threadVI;
+	results[3] = threadNMI;
+
+	return (void *) results;
 }
 
 template<class T>
@@ -512,7 +581,15 @@ double PthreadMetric<T>::computeInfoEntropyMetric() {
 		if (returnCode) {
 			cerr << "computeInfoEntropyMetric::pthread_join return code is "
 					<< returnCode << endl;
+		} else {
+			double* results = (double *) thread_status;
+			this->xentropy += results[0];
+			this->yentropy += results[1];
+			this->VI += results[2];
+			this->NMI += results[3];
 		}
+
+		free(thread_status);
 	}
 
 	pthread_attr_destroy(&attr);
@@ -531,9 +608,10 @@ double PthreadMetric<T>::computeInfoEntropyMetric() {
 template<class T>
 void* PthreadMetric<T>::clusterMatchingMetricAdaptor(void *arg) {
 	struct thread_arg<T> *tmp_pointer = (struct thread_arg<T> *) arg;
-	tmp_pointer->classPointer->subClusterMatchingMetricCalculation(tmp_pointer);
+	return tmp_pointer->classPointer->subClusterMatchingMetricCalculation(
+			tmp_pointer);
 
-	return NULL;
+	// return NULL;
 }
 
 template<class T>
@@ -595,11 +673,16 @@ void* PthreadMetric<T>::subClusterMatchingMetricCalculation(
 		} // end if
 	} // end for
 
-	this->fMeasure += threadFMeasure;
-	this->NVD += threadNVD;
+	// Do not update the global variables in threads, must synchronization if doing so
+//	this->fMeasure += threadFMeasure;
+//	this->NVD += threadNVD;
+//	pthread_exit((void*) 0);
 
-	pthread_exit((void*) 0);
-	return NULL;
+	double* results = new double[2];
+	results[0] = threadFMeasure;
+	results[1] = threadNVD;
+
+	return (void *) results;
 }
 
 template<class T>
@@ -649,7 +732,13 @@ double PthreadMetric<T>::computeClusterMatchingMetric() {
 		if (returnCode) {
 			cerr << "computeClusterMatchingMetric::pthread_join return code is "
 					<< returnCode << endl;
+		} else {
+			double* results = (double *) thread_status;
+			this->fMeasure += results[0];
+			this->NVD += results[1];
 		}
+
+		free(thread_status);
 	}
 
 	pthread_attr_destroy(&attr);
@@ -668,9 +757,9 @@ double PthreadMetric<T>::computeClusterMatchingMetric() {
 template<class T>
 void* PthreadMetric<T>::indexMetricAdaptor(void *arg) {
 	struct thread_arg<T> *tmp_pointer = (struct thread_arg<T> *) arg;
-	tmp_pointer->classPointer->subIndexMetricCalculation(tmp_pointer);
+	return tmp_pointer->classPointer->subIndexMetricCalculation(tmp_pointer);
 
-	return NULL;
+	// return NULL;
 }
 
 template<class T>
@@ -722,12 +811,19 @@ void* PthreadMetric<T>::subIndexMetricCalculation(struct thread_arg<T> *arg) {
 		} // end if
 	} // outer for
 
-	this->a11 += threadA11;
-	this->a00 += threadA00;
-	this->a10 += threadA10;
-	this->a01 += threadA01;
-	pthread_exit((void*) 0);
-	return NULL;
+//	this->a11 += threadA11;
+//	this->a00 += threadA00;
+//	this->a10 += threadA10;
+//	this->a01 += threadA01;
+//	pthread_exit((void*) 0);
+
+	double* results = new double[4];
+	results[0] = threadA11;
+	results[1] = threadA00;
+	results[2] = threadA10;
+	results[3] = threadA01;
+
+	return (void *) results;
 }
 
 template<class T>
@@ -776,7 +872,15 @@ double PthreadMetric<T>::computeIndexMetric() {
 		if (returnCode) {
 			cerr << "computeIndexMetric::pthread_join return code is "
 					<< returnCode << endl;
+		} else {
+			double* results = (double *) thread_status;
+			this->a11 += results[0];
+			this->a00 += results[1];
+			this->a10 += results[2];
+			this->a01 += results[3];
 		}
+
+		free(thread_status);
 	}
 
 	pthread_attr_destroy(&attr);

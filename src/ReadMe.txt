@@ -79,3 +79,4 @@ numThreads modularity modularity_density #intra-edges intra-density contraction 
 
 -----------------------------------------6. Note--------------------------------------------------
 Note: when running the programs, remember to change the predefined clock rate variables in MPIMetricMain.cpp and PthreadMetricMain.cpp to be the value of the clock rate of your own machine. There are used to calculate the running time of the parallel programs.
+On shared memory machines, recommend to use parallel Pthreads programs.

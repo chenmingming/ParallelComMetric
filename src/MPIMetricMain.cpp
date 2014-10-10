@@ -81,7 +81,7 @@ int main(int argc, char **argv) {
 		vector<unordered_set<int> > disCommunities;
 		disReader.getRankCommunity(disCommunities, rankid, numprocs);
 
-#ifdef MAIN_DEBUG
+#ifdef MAIN_C_DEBUG
 		if (OUTPUT_RANK == rankid) {
 			int disComSize = disCommunities.size();
 			cout << disComSize << " discovered communities: " << endl;
@@ -246,6 +246,11 @@ int main(int argc, char **argv) {
 			<< clusteringMetrics[0] << "\t" << clusteringMetrics[1] << "\t" << indexMetrics[0] << "\t"
 			<< indexMetrics[1] << "\t" << indexMetrics[2] << endl;
 		}
+
+//		if(rankid == OUTPUT_RANK) {
+//			cout << numprocs << "\t" << entropyMetrics[0] << "\t" << entropyMetrics[1] << "\t"
+//			<< clusteringMetrics[0] << "\t" << clusteringMetrics[1] << endl;
+//		}
 	}
 	// For metric without ground truth communities
 	else {
@@ -297,13 +302,19 @@ int main(int argc, char **argv) {
 		}
 #endif
 
+		// Directed network
+		unordered_map<int, unordered_map<int, double> > communityInNetwork;
+		if (!isUndirected) {
+			netReader.getCommunityReversedNetwork(disMapCommunities, communityInNetwork, isUnweighted, isUndirected);
+		}
+
 		disReader.getOutCommunityNodeInfo(communitySizes, disMapCommunities, outCommunityNodes);
 		outCommunityNodes.clear();
 
 		MPIMetric<int> mpiMetric;
 		double metrics[8];
 		double startExeCycle = rdtsc();
-		mpiMetric.computeMetricWithoutGroundTruth(rankid, comNetWeight, communitySizes, disMapCommunities, communityNetwork, isUndirected, metrics);
+		mpiMetric.computeMetricWithoutGroundTruth(rankid, comNetWeight, communitySizes, disMapCommunities, communityNetwork, communityInNetwork, isUndirected, metrics);
 		double endExeCycle = rdtsc();
 		double rankExeCycle = endExeCycle - startExeCycle;
 		double avgExeCycle;

@@ -39,6 +39,7 @@ public:
 			unordered_map<int, int>& communitySizes,
 			unordered_map<T, int>& disMapCommunities,
 			const unordered_map<T, unordered_map<T, double> >& communityNetwork,
+			const unordered_map<T, unordered_map<T, double> >& communityInNetwork,
 			bool isUndirected, double *metrics);
 
 	void computeInfoEntropyMetric(int rankid, int numprocs,

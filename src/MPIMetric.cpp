@@ -24,11 +24,13 @@ void MPIMetric<T>::computeMetricWithoutGroundTruth(int rankid,
 		double comNetWeight, unordered_map<int, int>& communitySizes,
 		unordered_map<T, int>& disMapCommunities,
 		const unordered_map<T, unordered_map<T, double> >& communityNetwork,
+		const unordered_map<T, unordered_map<T, double> >& communityInNetwork,
 		bool isUndirected, double *metrics) {
 	double totalWeight = 0;
 	MPI_Allreduce(&comNetWeight, &totalWeight, 1, MPI_DOUBLE, MPI_SUM,
 			MPI_COMM_WORLD);
 	unordered_map<int, unordered_map<int, double> > communityWeights;
+	unordered_map<int, unordered_map<int, double> > communityEdges;
 	typename unordered_map<T, unordered_map<T, double> >::const_iterator netIt;
 
 	for (netIt = communityNetwork.begin(); netIt != communityNetwork.end();
@@ -37,6 +39,7 @@ void MPIMetric<T>::computeMetricWithoutGroundTruth(int rankid,
 		int srcComId = disMapCommunities[srcId];
 		// The weights between a certain community to its neighboring communities
 		unordered_map<int, double> &comWeights = communityWeights[srcComId];
+		unordered_map<int, double> &comEdges = communityEdges[srcComId];
 		unordered_map<T, double> nbs = netIt->second;
 		typename unordered_map<T, double>::const_iterator nbIt;
 		for (nbIt = nbs.begin(); nbIt != nbs.end(); ++nbIt) {
@@ -45,6 +48,8 @@ void MPIMetric<T>::computeMetricWithoutGroundTruth(int rankid,
 			double weight = nbIt->second;
 			double comWeight = comWeights[dstComId];
 			comWeights[dstComId] = comWeight + weight;
+			double comEdge = comEdges[dstComId];
+			comEdges[dstComId] = comEdges[dstComId] + 1;
 
 #ifdef MPI_DEBUG
 			if (OUTPUT_RANK == rankid) {
@@ -53,6 +58,39 @@ void MPIMetric<T>::computeMetricWithoutGroundTruth(int rankid,
 				<< endl;
 			}
 #endif
+		}
+	}
+
+	// directed network
+	unordered_map<int, double> communityInWeights;
+	if (!isUndirected) {
+		for (netIt = communityInNetwork.begin();
+				netIt != communityInNetwork.end(); ++netIt) {
+			int srcId = netIt->first;
+			int srcComId = disMapCommunities[srcId];
+			unordered_map<T, double> nbs = netIt->second;
+			typename unordered_map<T, double>::const_iterator nbIt;
+			for (nbIt = nbs.begin(); nbIt != nbs.end(); ++nbIt) {
+				int dstId = nbIt->first;
+				unsigned int isExist = disMapCommunities.count(dstId);
+				bool outComNodes = false;
+				if (isExist) {
+					int dstComId = disMapCommunities[dstId];
+					if (srcComId != dstComId) {
+						outComNodes = true;
+					}
+				} else {
+					outComNodes = true;
+				}
+
+				if (outComNodes) {
+					double weight = nbIt->second;
+					double comWeight = communityInWeights[srcComId];
+					communityInWeights[srcComId] = communityInWeights[srcComId]
+							+ weight;
+				}
+
+			}
 		}
 	}
 
@@ -72,6 +110,7 @@ void MPIMetric<T>::computeMetricWithoutGroundTruth(int rankid,
 			++comIter) {
 		int srcComId = comIter->first;
 		unordered_map<int, double> comWeights = comIter->second;
+		unordered_map<int, double> comEdges = communityEdges[srcComId];
 
 #ifdef MPI_DEBUG
 		if (OUTPUT_RANK == rankid) {
@@ -82,36 +121,60 @@ void MPIMetric<T>::computeMetricWithoutGroundTruth(int rankid,
 #endif
 
 		double inWeights = comWeights[srcComId];
+		double inEdges = comEdges[srcComId];
 		double srcComSize = communitySizes[srcComId];
 		double outWeights = 0;
+		double out_incoming_weights = communityInWeights[srcComId];
 		double splitPenalty = 0;
 		typename unordered_map<int, double>::const_iterator weightIter;
 		for (weightIter = comWeights.begin(); weightIter != comWeights.end();
 				++weightIter) {
 			int dstComId = weightIter->first;
-			int dstComSize = communitySizes[dstComId];
 
 			if (srcComId != dstComId) {
+				int dstComSize = communitySizes[dstComId];
 				double comWeight = weightIter->second;
 				outWeights += comWeight;
+				double comEdge = comEdges[dstComId];
 				double sp = (comWeight / totalWeight)
-						* (comWeight / (srcComSize * dstComSize));
+						* (comEdge / (srcComSize * dstComSize));
 				splitPenalty += sp;
 			}
 		}
 
-		// modularity
-		rankModularity += inWeights / totalWeight
-				- pow((inWeights + outWeights) / totalWeight, 2);
+//		if (OUTPUT_RANK == rankid) {
+//			cout << "inWeights = " << inWeights << ", outWeights = "
+//					<< outWeights << ", out_incoming_weights = "
+//					<< out_incoming_weights << endl;
+//		}
+
+// modularity
+		if (isUndirected) {
+			rankModularity += inWeights / totalWeight
+					- pow((inWeights + outWeights) / totalWeight, 2);
+		} else {
+			rankModularity += inWeights / totalWeight
+					- ((inWeights + outWeights)
+							* (inWeights + out_incoming_weights))
+							/ pow(totalWeight, 2);
+		}
 
 		// Modularity Density Qds
 		double inDensity = 0;
 		if (srcComSize > 1) {
-			inDensity = inWeights / (srcComSize * (srcComSize - 1));
+			inDensity = inEdges / (srcComSize * (srcComSize - 1));
 		}
-		rankQds += (inWeights / totalWeight) * inDensity
-				- pow(((inWeights + outWeights) / totalWeight) * inDensity, 2)
-				- splitPenalty;
+		if (isUndirected) {
+			rankQds += (inWeights / totalWeight) * inDensity
+					- pow(((inWeights + outWeights) / totalWeight) * inDensity,
+							2) - splitPenalty;
+		} else {
+			rankQds += (inWeights / totalWeight) * inDensity
+					- (((inWeights + outWeights)
+							* (inWeights + out_incoming_weights))
+							/ pow(totalWeight, 2)) * pow(inDensity, 2)
+					- splitPenalty;
+		}
 
 		// intra-edges
 		if (isUndirected) {
@@ -866,8 +929,11 @@ void MPIMetric<T>::computeClusterMatchingMetric(int rankid, int numprocs,
 // (1) To get FMeasure and the first part of NVD
 // To record the max of each real community of this rank
 	double startCompCycle = rdtsc();
-	double realMaxFMeasures[realComNum];
-	double realMaxCommons[realComNum];
+
+	//double realMaxFMeasures[realComNum];
+	double *realMaxFMeasures = (double *) malloc(realComNum * sizeof(double));
+//	double realMaxCommons[realComNum];
+	double *realMaxCommons = (double *) malloc(realComNum * sizeof(double));
 	memset(realMaxFMeasures, 0, realComNum * sizeof(double));
 	memset(realMaxCommons, 0, realComNum * sizeof(double));
 	for (int i = 0; i < realComNum; ++i) {
@@ -996,6 +1062,9 @@ void MPIMetric<T>::computeClusterMatchingMetric(int rankid, int numprocs,
 					if (send_flag) {
 						++message_send_num;
 						free(send_buff);
+
+//						cout << "First: message_send_num = " << message_send_num
+//								<< endl;
 					}
 				} /* if request */
 			} /* while flag */
@@ -1127,7 +1196,8 @@ void MPIMetric<T>::computeClusterMatchingMetric(int rankid, int numprocs,
 	disComNum = disCommunities.size();
 // To record the max of each detected community of this rank
 	startCompCycle = rdtsc();
-	double disMaxCommons[disComNum];
+	// double disMaxCommons[disComNum];
+	double *disMaxCommons = (double *) malloc(disComNum * sizeof(double));
 	memset(disMaxCommons, 0, disComNum * sizeof(double));
 	for (int i = 0; i < disComNum; ++i) {
 		unordered_set<T> disCommunity = disCommunities[i];
@@ -1236,6 +1306,9 @@ void MPIMetric<T>::computeClusterMatchingMetric(int rankid, int numprocs,
 					if (send_flag) {
 						++message_send_num;
 						free(real_send_buff);
+
+//						cout << "Second: message_send_num = "
+//								<< message_send_num << endl;
 					}
 				} /* if request */
 			} /* while flag */
