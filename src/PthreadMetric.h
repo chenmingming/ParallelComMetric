@@ -2,7 +2,7 @@
  * PthreadMetric.h
  *
  *  Created on: Apr 26, 2014
- *      Author: Miles
+ *      Author: Sisi
  */
 
 #ifndef PTHREADMETRIC_H_
