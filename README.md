@@ -5,7 +5,7 @@ Collaborator: Boleslaw K. Szymanski (email: szymab@rpi.edu).
 
 A parallel toolkit, implemented with MPI and Pthreads, to calculate the community quality metrics with and without ground truth community structure. The source code is under directory src. Also, please refer to the ReadMe.txt under directory src for how to run the code.
 
-Please email comments and suggestions to Mingming Chen via mileschen2008@gmail.com.
+Please email comments and suggestions to Mingming Chen via mileschen2008@gmail.com and Sisi Liu via liusisiapply@gmail.com.
 
 
 References
