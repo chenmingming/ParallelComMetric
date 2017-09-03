@@ -1,5 +1,8 @@
 Authors: Mingming Chen (email: mileschen2008@gmail.com) and Sisi Liu (email: liusisiapply@gmail.com)
-Collaborator: Boleslaw K. Szymanski (email: szymab@rpi.edu)
+Collaborator: Boleslaw K. Szymanski (email: szymab@rpi.edu).
+
+Please cite our paper below if publishing a paper using this toolkit.
+Mingming Chen, Sisi Liu, and Boleslaw Szymanski, “Parallel Toolkit for Measuring the Quality of Network Community Structure”, The First European Network Intelligence Conference (ENIC), Wroclaw, Poland, September, 2014, pp. 22-29.
 
 
 
